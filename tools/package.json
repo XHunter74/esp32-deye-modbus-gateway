@@ -1,0 +1,15 @@
+{
+  "name": "deye-gw-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Register scanner for the Deye RS232 gateway and the Solarman logger",
+  "scripts": {
+    "scan": "tsx scan-registers.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,6 @@
+.pio/
+.vscode/
+node_modules/
+tools/node_modules/
+tools/.env
+*.csv
