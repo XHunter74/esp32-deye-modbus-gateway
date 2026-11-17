@@ -90,7 +90,7 @@ function up(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.flo
 async function status(){try{const r=await fetch('/api/status');const j=await r.json();
 $('#sub').textContent=j.host+' · '+j.ip+' · v'+j.version;
 const modes=['RTU over TCP','Modbus TCP (MBAP)'];
-const rows=[['Mode',modes[j.mode]+' on port '+j.port],['Serial',j.serial],['WiFi',j.ssid+' ('+j.rssi+' dBm)'],
+const rows=[['Firmware','v'+j.version+' <span class="mut">('+j.built+')</span>'],['Chip',j.chip+' · IDF '+j.sdk],['Mode',modes[j.mode]+' on port '+j.port],['Serial',j.serial],['WiFi',j.ssid+' ('+j.rssi+' dBm)'],
 ['Uptime',up(j.uptime)],['Free heap',j.heap+' bytes'],['TCP clients',j.clients.length?j.clients.join('<br>'):'none'],
 ['Requests',j.requests],['Responses',j.responses],['Exceptions',j.exceptions],
 ['Timeouts','<span class="'+(j.timeouts?'bad':'')+'">'+j.timeouts+'</span>'],
