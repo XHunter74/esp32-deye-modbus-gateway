@@ -46,6 +46,9 @@ void handleStatus() {
     long lastAgo = gRtuStats.lastActivityMs ? (long)((millis() - gRtuStats.lastActivityMs) / 1000) : -1;
     String j = "{";
     j += "\"version\":\"" FW_VERSION "\"";
+    j += ",\"built\":\"" __DATE__ " " __TIME__ "\"";
+    j += ",\"sdk\":\"" + String(ESP.getSdkVersion()) + "\"";
+    j += ",\"chip\":\"" + String(ESP.getChipModel()) + " rev " + String(ESP.getChipRevision()) + "\"";
     j += ",\"host\":\"" + jsonEscape(gConfig.hostname) + "\"";
     j += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
     j += ",\"ssid\":\"" + jsonEscape(WiFi.SSID()) + "\"";
