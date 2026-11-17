@@ -2,6 +2,10 @@
 
 #include <Arduino.h>
 
+#ifndef FW_VERSION
+#define FW_VERSION "dev"
+#endif
+
 // TCP framing used by the gateway
 enum class GwMode : uint8_t {
     RtuOverTcp = 0,  // raw Modbus RTU frames (with CRC) over TCP, like USR-TCP232

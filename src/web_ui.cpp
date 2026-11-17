@@ -11,10 +11,6 @@
 #include "web_page.h"
 #include "wifi_setup.h"
 
-#ifndef FW_VERSION
-#define FW_VERSION "dev"
-#endif
-
 namespace {
 
 WebServer server(80);
