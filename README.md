@@ -117,7 +117,7 @@ The portal opens only while no WiFi credentials are stored. Once a network is sa
 
 - it keeps reconnecting in the background (every 10 s, backing off to 2 min);
 - if WiFi stays down for **5 minutes**, it restarts itself;
-- every 30 s it pings the router (default gateway). WiFi can report "connected" while the router no longer delivers packets, and the gateway then silently drops off the LAN. After 3 unanswered checks in a row (~1.5 min) it reconnects WiFi, after 8 (~4 min) it restarts with cause `gateway unreachable`. If the router never answered ping since boot, the check does nothing;
+- every 30 s it pings the router (default gateway). WiFi can report "connected" while the router no longer delivers packets, and the gateway then silently drops off the LAN. After 3 unanswered checks in a row (~1.5 min) it reconnects WiFi, after 8 (~4 min) it restarts with cause `gateway unreachable`. Independently of the WiFi status and of the ping state, it restarts with cause `no gateway reply for 5 min` if no ping was answered for 5 minutes; a ping that does not finish within 10 s counts as failed. If the router never answered ping since boot, the check does nothing;
 - to change the network, use **Settings → Reset WiFi settings** or hold **BOOT** for 5 s.
 
 ## Default settings
@@ -224,7 +224,7 @@ If it comes back after a reset and the Status page shows the boot counter increa
 | Last reset | why the current boot happened: power-on, brownout, crash (panic), watchdog, or software restart with its cause (settings saved, firmware update, WiFi down for 5 min, ...) |
 | WiFi uptime | time since the current WiFi connection was established |
 | Gateway ping | router address, last round-trip time, how long ago it last answered, failed checks and forced reconnects since boot |
-| Restart history | last 10 boots, newest first: boot number, how long the previous run lasted, reset reason with restart cause and the raw ROM reset code (e.g. `RTCWDT_RTC`). "ran before" is kept in RTC memory, which survives watchdog, crash and software resets but not a power loss: *unknown (power lost)* means the supply went off, a known value means the chip reset while powered. Also at `/api/history` |
+| Restart history | last 10 boots, newest first: boot number, how long the previous run lasted, reset reason with restart cause and the raw ROM reset code (e.g. `RTCWDT_RTC`). "ran before" is kept in RTC memory, which survives watchdog, crash and software resets but not a power loss: *unknown (power lost)* means the supply went off, a known value means the chip reset while powered. Each entry also shows the **last heartbeat** of the previous run, saved to flash every 5 min (survives a power loss): uptime, WiFi status, how long before that the gateway last answered ping, failed checks, whether a ping was running. Also at `/api/history` |
 | WiFi drops | lost connections since boot, time of the last one and the WiFi reason code (e.g. 200 beacon timeout = signal lost, 15/202 = wrong password) |
 | Free heap (min) | current and lowest free memory since boot |
 

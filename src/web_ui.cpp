@@ -83,6 +83,7 @@ void handleStatus() {
     j += ",\"gwRtt\":" + String(gNetcheck.lastRttMs);
     j += ",\"gwFails\":" + String(gNetcheck.failedChecks);
     j += ",\"gwReconn\":" + String(gNetcheck.reconnects);
+    j += ",\"gwStuck\":" + String(gNetcheck.stuckPings);
     j += "}";
     server.send(200, "application/json", j);
 }
