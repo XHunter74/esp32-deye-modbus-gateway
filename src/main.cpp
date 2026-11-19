@@ -6,6 +6,7 @@
 #include <WiFi.h>
 
 #include "config.h"
+#include "diag.h"
 #include "rtu.h"
 #include "tcp_bridge.h"
 #include "web_ui.h"
@@ -20,6 +21,7 @@ void setup() {
     Serial.println("\n[boot] Deye RS232 gateway " FW_VERSION);
     pinMode(BOOT_BUTTON, INPUT_PULLUP);
 
+    diagBegin();
     configLoad();
     rtuBegin();
     wifiSetup();
@@ -32,6 +34,9 @@ void setup() {
     webBegin();
     Serial.printf("[boot] ready: http://%s.local, %s on TCP port %u\n", gConfig.hostname.c_str(),
                   gConfig.mode == GwMode::ModbusTcp ? "Modbus TCP" : "RTU over TCP", gConfig.tcpPort);
+
+    // Reboot if loop() ever hangs; the Status page then shows "task watchdog" as reset reason.
+    enableLoopWDT();
 }
 
 void loop() {
@@ -48,10 +53,6 @@ void loop() {
         pressedSince = 0;
     }
 
-    static uint32_t lastWifiCheck = 0;
-    if (millis() - lastWifiCheck > 30000) {
-        lastWifiCheck = millis();
-        if (WiFi.status() != WL_CONNECTED) WiFi.reconnect();
-    }
+    wifiLoop();
     delay(2);
 }

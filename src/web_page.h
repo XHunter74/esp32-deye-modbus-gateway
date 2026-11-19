@@ -91,7 +91,7 @@ async function status(){try{const r=await fetch('/api/status');const j=await r.j
 $('#sub').textContent=j.host+' · '+j.ip+' · v'+j.version;
 const modes=['RTU over TCP','Modbus TCP (MBAP)'];
 const rows=[['Firmware','v'+j.version+' <span class="mut">('+j.built+')</span>'],['Chip',j.chip+' · IDF '+j.sdk],['Mode',modes[j.mode]+' on port '+j.port],['Serial',j.serial],['WiFi',j.ssid+' ('+j.rssi+' dBm)'],
-['Uptime',up(j.uptime)],['Free heap',j.heap+' bytes'],['TCP clients',j.clients.length?j.clients.join('<br>'):'none'],
+['Uptime',up(j.uptime)+' · boot #'+j.boots],['Last reset','<span class="'+(/brownout|crash|watchdog/.test(j.resetReason)?'bad':'')+'">'+j.resetReason+'</span>'+(j.restartCause?' ('+j.restartCause+')':'')],['WiFi uptime',j.wifiUp<0?'<span class="bad">not connected</span>':up(j.wifiUp)],['WiFi drops',j.wifiDisc+(j.wifiDisc?' · last '+up(j.wifiDiscAgo)+' ago':'')+(j.wifiReason?' · reason '+j.wifiReason:'')],['Free heap',j.heap+' bytes (min '+j.minHeap+')'],['TCP clients',j.clients.length?j.clients.join('<br>'):'none'],
 ['Requests',j.requests],['Responses',j.responses],['Exceptions',j.exceptions],
 ['Timeouts','<span class="'+(j.timeouts?'bad':'')+'">'+j.timeouts+'</span>'],
 ['CRC errors','<span class="'+(j.crc?'bad':'')+'">'+j.crc+'</span>'],
