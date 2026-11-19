@@ -1,16 +1,25 @@
 #pragma once
 
 #include <Arduino.h>
+#include <esp_system.h>
 
 // Persistent diagnostics: boot counter, reset reason and the cause of the last
 // software restart (stored in NVS), plus WiFi connection statistics (RAM).
 
 void diagBegin();  // call first in setup()
+void diagLoop();   // call from loop(): keeps the uptime marker in RTC memory current
+
+// Restart history (newest first, DIAG_HISTORY_LEN entries kept in NVS) as a JSON array:
+// [{"boot":N,"reason":"...","raw":R,"cause":"...","ranS":S}], ranS = how long the previous
+// run lasted, -1 if unknown (RTC memory lost, i.e. the power went off).
+String diagHistoryJson();
+static constexpr int DIAG_HISTORY_LEN = 10;
 
 // Records why the firmware restarts itself, then restarts.
 [[noreturn]] void diagRestart(const char *cause);
 
 uint32_t diagBootCount();
+const char *diagResetReasonName(esp_reset_reason_t r);
 const char *diagResetReason();       // hardware reason of the current boot (brownout, panic, ...)
 const String &diagLastRestartCause();  // software cause saved before the previous restart ("" if none)
 

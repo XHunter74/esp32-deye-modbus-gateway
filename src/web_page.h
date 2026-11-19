@@ -35,6 +35,8 @@ progress{width:100%}
 <div class="card"><table>
 <tr><td>Last request</td><td class="mono" id="lreq"></td></tr>
 <tr><td>Last response</td><td class="mono" id="lresp"></td></tr></table></div>
+<div class="card"><b>Restart history</b> <span class="mut">(newest first)</span>
+<table id="hist"></table></div>
 </section>
 
 <section id="settings" class="hid"><form id="cfg" class="card">
@@ -99,6 +101,10 @@ const rows=[['Firmware','v'+j.version+' <span class="mut">('+j.built+')</span>']
 $('#st').innerHTML=rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('');
 $('#lreq').textContent=j.lastReq;$('#lresp').textContent=j.lastResp;}catch(e){}}
 setInterval(status,2000);status();
+const RAW={1:'POWERON',3:'SW',4:'OWDT',5:'DEEPSLEEP',6:'SDIO',7:'TG0WDT_SYS',8:'TG1WDT_SYS',9:'RTCWDT_SYS',10:'INTRUSION',11:'TGWDT_CPU',12:'SW_CPU',13:'RTCWDT_CPU',14:'EXT_CPU',15:'RTCWDT_BROWN_OUT',16:'RTCWDT_RTC'};
+async function hist(){try{const h=await (await fetch('/api/history')).json();
+$('#hist').innerHTML='<tr><td class="mut">Boot · ran before</td><td class="mut">Reason</td></tr>'+h.map(e=>'<tr><td>#'+e.boot+' · '+(e.ranS<0?'<span class="mut">unknown (power lost)</span>':up(e.ranS))+'</td><td><span class="'+(/brownout|crash|watchdog/.test(e.reason)?'bad':'')+'">'+e.reason+'</span>'+(e.cause?' ('+e.cause+')':'')+' <span class="mut">'+(RAW[e.raw]||e.raw)+'</span></td></tr>').join('');}catch(e){}}
+hist();
 async function loadCfg(){const j=await (await fetch('/api/config')).json();const f=$('#cfg');
 for(const k in j){const e=f.elements[k];if(e&&k!='pass')e.value=j[k];}}
 $('#cfg').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target);
