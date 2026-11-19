@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "diag.h"
+#include "netcheck.h"
 #include "rtu.h"
 #include "scanner.h"
 #include "tcp_bridge.h"
@@ -77,6 +78,11 @@ void handleStatus() {
     j += ",\"wifiReason\":\"" + (gWifiStats.lastReason ? String(gWifiStats.lastReason) + " " + diagWifiReasonName(gWifiStats.lastReason) : String("")) + "\"";
     j += ",\"wifiDiscAgo\":" + String(gWifiStats.lastDisconnectMs ? (long)((millis() - gWifiStats.lastDisconnectMs) / 1000) : -1L);
     j += ",\"wifiUp\":" + String(gWifiStats.connectedSinceMs ? (long)((millis() - gWifiStats.connectedSinceMs) / 1000) : -1L);
+    j += ",\"gw\":\"" + WiFi.gatewayIP().toString() + "\"";
+    j += ",\"gwOkAgo\":" + String(gNetcheck.lastOkMs ? (long)((millis() - gNetcheck.lastOkMs) / 1000) : -1L);
+    j += ",\"gwRtt\":" + String(gNetcheck.lastRttMs);
+    j += ",\"gwFails\":" + String(gNetcheck.failedChecks);
+    j += ",\"gwReconn\":" + String(gNetcheck.reconnects);
     j += "}";
     server.send(200, "application/json", j);
 }
@@ -200,6 +206,7 @@ void handleUpdateDone() {
 
 void handleUpdateUpload() {
     if (!gConfig.adminPassword.isEmpty() && !server.authenticate("admin", gConfig.adminPassword.c_str())) return;
+    feedLoopWDT();  // the whole upload runs inside one handleClient() call and takes longer than the loop watchdog
     HTTPUpload &up = server.upload();
     if (up.status == UPLOAD_FILE_START) {
         Serial.printf("[ota] %s\n", up.filename.c_str());

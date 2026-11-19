@@ -7,6 +7,7 @@
 
 #include "config.h"
 #include "diag.h"
+#include "netcheck.h"
 #include "rtu.h"
 #include "tcp_bridge.h"
 #include "web_ui.h"
@@ -54,5 +55,6 @@ void loop() {
     }
 
     wifiLoop();
+    netcheckLoop();
     delay(2);
 }
