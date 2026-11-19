@@ -17,7 +17,7 @@ Developed for a Deye SUN-10K single-phase hybrid (SG0xLP1). The primary client i
   - **Firmware**: OTA update from the browser.
 - mDNS: `http://deye-gw.local`
 - Hold the **BOOT** button for 5 s to erase WiFi settings.
-- Self-healing WiFi: background reconnect with backoff, restart after 5 min without WiFi, no fallback to the setup AP once configured.
+- Self-healing WiFi: background reconnect with backoff, restart after 5 min without WiFi, gateway ping check that catches a "connected" but dead link, no fallback to the setup AP once configured.
 - Diagnostics on the Status page: boot counter, last reset reason (brownout, crash, watchdog, restart cause), WiFi drops with reason codes, minimum free heap.
 - The on-board LED (GPIO2) lights up while a request is on the serial line.
 
@@ -117,6 +117,7 @@ The portal opens only while no WiFi credentials are stored. Once a network is sa
 
 - it keeps reconnecting in the background (every 10 s, backing off to 2 min);
 - if WiFi stays down for **5 minutes**, it restarts itself;
+- every 30 s it pings the router (default gateway). WiFi can report "connected" while the router no longer delivers packets, and the gateway then silently drops off the LAN. After 3 unanswered checks in a row (~1.5 min) it reconnects WiFi, after 8 (~4 min) it restarts with cause `gateway unreachable`. If the router never answered ping since boot, the check does nothing;
 - to change the network, use **Settings → Reset WiFi settings** or hold **BOOT** for 5 s.
 
 ## Default settings
@@ -205,7 +206,9 @@ The same scan is available without a PC in the web UI (**Scanner** tab).
 
 ### The gateway does not answer ping
 
-`Destination host unreachable` from your own PC means nothing answers ARP: the ESP32 is not connected to WiFi at all (not a web server problem). Check, in this order:
+`Destination host unreachable` from your own PC means nothing answers ARP: the ESP32 is either not connected to WiFi or its link is dead while it still believes it is connected (not a web server problem).
+
+If it comes back after a reset and the Status page shows the boot counter increased by one only (no restart in between), the link was dead without the ESP32 noticing. The gateway ping check now recovers from this on its own; look at the **Gateway ping** row and for restart cause `gateway unreachable`. Otherwise check, in this order:
 
 1. **Power**: the red power LED must be on. Measure VIN under load: it should stay at 4.8–5.2 V. WiFi transmit peaks reach 300–500 mA, so use a buck converter rated ≥ 1 A and add 470–1000 µF between VIN and GND. A weak supply causes brownout reboot loops.
 2. **Serial log**: connect USB (it can stay on the inverter) and run `pio device monitor`. Each boot prints `[diag] boot #N, reset reason: ...` and every WiFi event with its reason code (`Brownout detector was triggered` = power problem).
@@ -220,6 +223,7 @@ The same scan is available without a PC in the web UI (**Scanner** tab).
 | Uptime · boot #N | time since boot; the boot counter survives restarts |
 | Last reset | why the current boot happened: power-on, brownout, crash (panic), watchdog, or software restart with its cause (settings saved, firmware update, WiFi down for 5 min, ...) |
 | WiFi uptime | time since the current WiFi connection was established |
+| Gateway ping | router address, last round-trip time, how long ago it last answered, failed checks and forced reconnects since boot |
 | WiFi drops | lost connections since boot, time of the last one and the WiFi reason code (e.g. 200 beacon timeout = signal lost, 15/202 = wrong password) |
 | Free heap (min) | current and lowest free memory since boot |
 
@@ -239,6 +243,7 @@ src/config.*          settings stored in NVS
 src/rtu.*             UART / Modbus RTU master, bus mutex, statistics
 src/tcp_bridge.*      TCP server: RTU-over-TCP and Modbus TCP (MBAP)
 src/scanner.*         register scanner task
+src/netcheck.*        gateway ping check: reconnect / restart when the link is dead
 src/wifi_setup.*      WiFiManager captive portal, reconnect with backoff, WiFi watchdog
 src/web_ui.*          HTTP API and OTA
 src/web_page.h        single-page web UI
