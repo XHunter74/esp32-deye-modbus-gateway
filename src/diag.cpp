@@ -35,6 +35,9 @@ struct Heartbeat {
     uint16_t gwFails;  // failed checks in a row
     uint8_t wifi;      // wl_status_t
     uint8_t ping;      // ping session running
+    uint8_t bssid[6];  // mesh node / AP we were connected to
+    uint8_t chan;
+    uint8_t pad;
 };
 constexpr uint32_t HB_FIRST_S = 60;
 constexpr uint32_t HB_EVERY_S = 300;
@@ -61,12 +64,23 @@ struct HistEntry {
     int32_t hbGwOkAgoS;
     uint16_t hbFails;
     uint8_t pad[2];
+    uint8_t hbBssid[6];
+    uint8_t hbChan;
+    uint8_t pad2;
 };
 HistEntry history[DIAG_HISTORY_LEN];
+constexpr size_t HIST_V2_SIZE = offsetof(HistEntry, hbBssid);  // layout before the BSSID fields
 
 void loadHistory(Preferences &p) {
-    if (p.getBytesLength("hist2") == sizeof(history)) {
-        p.getBytes("hist2", history, sizeof(history));
+    if (p.getBytesLength("hist3") == sizeof(history)) {
+        p.getBytes("hist3", history, sizeof(history));
+        return;
+    }
+    if (p.getBytesLength("hist2") == HIST_V2_SIZE * DIAG_HISTORY_LEN) {
+        uint8_t raw[HIST_V2_SIZE * DIAG_HISTORY_LEN];
+        p.getBytes("hist2", raw, sizeof(raw));
+        for (int i = 0; i < DIAG_HISTORY_LEN; ++i) memcpy(&history[i], raw + i * HIST_V2_SIZE, HIST_V2_SIZE);
+        p.remove("hist2");
         return;
     }
     HistEntryV1 old[DIAG_HISTORY_LEN];
@@ -91,6 +105,11 @@ void saveHeartbeat(uint32_t s) {
     hb.gwFails = (uint16_t)(gNetcheck.failsInRow > 65535 ? 65535 : gNetcheck.failsInRow);
     hb.wifi = (uint8_t)WiFi.status();
     hb.ping = netcheckPingRunning() ? 1 : 0;
+    if (WiFi.status() == WL_CONNECTED) {
+        const uint8_t *b = WiFi.BSSID();
+        if (b) memcpy(hb.bssid, b, 6);
+        hb.chan = (uint8_t)WiFi.channel();
+    }
     Preferences p;
     p.begin(NS, false);
     p.putBytes("hb", &hb, sizeof(hb));
@@ -101,6 +120,12 @@ void writeMarker(uint32_t s) {
     rtcMarker.magic = RTC_MAGIC;
     rtcMarker.uptimeS = s;
     rtcMarker.check = RTC_MAGIC ^ s ^ 0xA5A5A5A5;
+}
+
+String macStr(const uint8_t *m) {
+    char b[18];
+    snprintf(b, sizeof(b), "%02X:%02X:%02X:%02X:%02X:%02X", m[0], m[1], m[2], m[3], m[4], m[5]);
+    return String(b);
 }
 
 String esc(const char *in) {
@@ -162,11 +187,13 @@ void diagBegin() {
         e.hbFails = hb.gwFails;
         e.hbWifi = hb.wifi;
         e.hbPing = hb.ping;
+        memcpy(e.hbBssid, hb.bssid, 6);
+        e.hbChan = hb.chan;
     }
     loadHistory(p);
     memmove(&history[1], &history[0], sizeof(HistEntry) * (DIAG_HISTORY_LEN - 1));
     history[0] = e;
-    p.putBytes("hist2", history, sizeof(history));
+    p.putBytes("hist3", history, sizeof(history));
     p.end();
     writeMarker(0);
     Serial.printf("[diag] boot #%u, reset reason: %s%s%s\n", bootCount, diagResetReason(),
@@ -208,7 +235,8 @@ String diagHistoryJson() {
              "\",\"raw\":" + String(e.raw) + ",\"cause\":\"" + esc(e.cause) + "\",\"ranS\":" + String(e.ranS);
         if (e.hbUptimeS >= 0)
             j += ",\"hb\":{\"up\":" + String(e.hbUptimeS) + ",\"wifi\":" + String(e.hbWifi) + ",\"gwAgo\":" +
-                 String(e.hbGwOkAgoS) + ",\"fails\":" + String(e.hbFails) + ",\"ping\":" + String(e.hbPing) + "}";
+                 String(e.hbGwOkAgoS) + ",\"fails\":" + String(e.hbFails) + ",\"ping\":" + String(e.hbPing) +
+                 ",\"ap\":\"" + macStr(e.hbBssid) + "\",\"ch\":" + String(e.hbChan) + "}";
         j += "}";
     }
     return j + "]";
