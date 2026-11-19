@@ -5,6 +5,7 @@
 #include <WiFi.h>
 
 #include "config.h"
+#include "diag.h"
 #include "rtu.h"
 #include "scanner.h"
 #include "tcp_bridge.h"
@@ -15,6 +16,7 @@ namespace {
 
 WebServer server(80);
 uint32_t restartAt = 0;  // deferred restart so the HTTP reply is delivered first
+const char *restartCause = "web UI";
 bool wifiResetPending = false;
 
 bool authorized() {
@@ -67,6 +69,14 @@ void handleStatus() {
     j += ",\"lastAgo\":" + String(lastAgo);
     j += ",\"lastReq\":\"" + String(gRtuStats.lastRequest) + "\"";
     j += ",\"lastResp\":\"" + String(gRtuStats.lastResponse) + "\"";
+    j += ",\"minHeap\":" + String(ESP.getMinFreeHeap());
+    j += ",\"boots\":" + String(diagBootCount());
+    j += ",\"resetReason\":\"" + String(diagResetReason()) + "\"";
+    j += ",\"restartCause\":\"" + jsonEscape(diagLastRestartCause()) + "\"";
+    j += ",\"wifiDisc\":" + String(gWifiStats.disconnects);
+    j += ",\"wifiReason\":\"" + (gWifiStats.lastReason ? String(gWifiStats.lastReason) + " " + diagWifiReasonName(gWifiStats.lastReason) : String("")) + "\"";
+    j += ",\"wifiDiscAgo\":" + String(gWifiStats.lastDisconnectMs ? (long)((millis() - gWifiStats.lastDisconnectMs) / 1000) : -1L);
+    j += ",\"wifiUp\":" + String(gWifiStats.connectedSinceMs ? (long)((millis() - gWifiStats.connectedSinceMs) / 1000) : -1L);
     j += "}";
     server.send(200, "application/json", j);
 }
@@ -121,6 +131,7 @@ void handleConfigPost() {
     gConfig = c;
     configSave();
     server.send(200, "text/plain", "Saved. Rebooting...");
+    restartCause = "settings saved";
     restartAt = millis() + 1000;
 }
 
@@ -155,13 +166,17 @@ void handleScanCsv() {
     server.sendHeader("Content-Disposition", "attachment; filename=\"deye-scan.csv\"");
     server.setContentLength(CONTENT_LENGTH_UNKNOWN);
     server.send(200, "text/csv", "");
-    scannerCsv([](const String &chunk) { server.sendContent(chunk); });
+    scannerCsv([](const String &chunk) {
+        server.sendContent(chunk);
+        feedLoopWDT();  // large CSV over a slow link must not trip the loop watchdog
+    });
     server.sendContent("");
 }
 
 void handleReboot() {
     if (!authorized()) return;
     server.send(200, "text/plain", "Rebooting...");
+    restartCause = "reboot from web UI";
     restartAt = millis() + 500;
 }
 
@@ -177,7 +192,10 @@ void handleUpdateDone() {
     if (!authorized()) return;
     bool ok = !Update.hasError();
     server.send(ok ? 200 : 500, "text/plain", ok ? "Update OK, rebooting..." : "Update failed: " + String(Update.errorString()));
-    if (ok) restartAt = millis() + 1000;
+    if (ok) {
+        restartCause = "firmware update";
+        restartAt = millis() + 1000;
+    }
 }
 
 void handleUpdateUpload() {
@@ -218,6 +236,6 @@ void webLoop() {
     server.handleClient();
     if (restartAt && (int32_t)(millis() - restartAt) >= 0) {
         if (wifiResetPending) wifiResetAndRestart();
-        ESP.restart();
+        diagRestart(restartCause);
     }
 }

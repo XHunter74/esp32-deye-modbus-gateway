@@ -17,6 +17,8 @@ Developed for a Deye SUN-10K single-phase hybrid (SG0xLP1). The primary client i
   - **Firmware**: OTA update from the browser.
 - mDNS: `http://deye-gw.local`
 - Hold the **BOOT** button for 5 s to erase WiFi settings.
+- Self-healing WiFi: background reconnect with backoff, restart after 5 min without WiFi, no fallback to the setup AP once configured.
+- Diagnostics on the Status page: boot counter, last reset reason (brownout, crash, watchdog, restart cause), WiFi drops with reason codes, minimum free heap.
 - The on-board LED (GPIO2) lights up while a request is on the serial line.
 
 ## Hardware
@@ -111,7 +113,11 @@ After the first flash, updates can be uploaded from the web UI (**Firmware** tab
 4. Open `http://deye-gw.local` (or the IP from your router) and check **Status**.
 5. Optional: set a web password in **Settings** (user `admin`).
 
-If the WiFi connection fails at boot, the portal opens again for 5 minutes, then the gateway reboots and retries.
+The portal opens only while no WiFi credentials are stored. Once a network is saved, the gateway never falls back to the portal on its own, so a router outage cannot take it off the LAN:
+
+- it keeps reconnecting in the background (every 10 s, backing off to 2 min);
+- if WiFi stays down for **5 minutes**, it restarts itself;
+- to change the network, use **Settings → Reset WiFi settings** or hold **BOOT** for 5 s.
 
 ## Default settings
 
@@ -195,6 +201,30 @@ $env:SCAN_PROTO="rtu"; $env:DEYE_HOST="deye-gw.local"; $env:SCAN_START="10000"; 
 
 The same scan is available without a PC in the web UI (**Scanner** tab).
 
+## Troubleshooting
+
+### The gateway does not answer ping
+
+`Destination host unreachable` from your own PC means nothing answers ARP: the ESP32 is not connected to WiFi at all (not a web server problem). Check, in this order:
+
+1. **Power**: the red power LED must be on. Measure VIN under load: it should stay at 4.8–5.2 V. WiFi transmit peaks reach 300–500 mA, so use a buck converter rated ≥ 1 A and add 470–1000 µF between VIN and GND. A weak supply causes brownout reboot loops.
+2. **Serial log**: connect USB (it can stay on the inverter) and run `pio device monitor`. Each boot prints `[diag] boot #N, reset reason: ...` and every WiFi event with its reason code (`Brownout detector was triggered` = power problem).
+3. **Setup AP**: look for `Deye-GW-XXXXXX` with a phone next to the inverter. It is only there when no WiFi credentials are stored.
+4. **Router**: check the client/DHCP list for `deye-gw`, its signal strength and when it last connected. A fixed DHCP lease makes the address predictable.
+5. **Signal**: the inverter's metal case shields the small DevKit antenna. Below about −75 dBm, move the ESP32 outside the case or use a board with an external antenna.
+
+### Status page diagnostics
+
+| Row | Meaning |
+|---|---|
+| Uptime · boot #N | time since boot; the boot counter survives restarts |
+| Last reset | why the current boot happened: power-on, brownout, crash (panic), watchdog, or software restart with its cause (settings saved, firmware update, WiFi down for 5 min, ...) |
+| WiFi uptime | time since the current WiFi connection was established |
+| WiFi drops | lost connections since boot, time of the last one and the WiFi reason code (e.g. 200 beacon timeout = signal lost, 15/202 = wrong password) |
+| Free heap (min) | current and lowest free memory since boot |
+
+A frozen main loop is caught by the loop watchdog; the next boot then shows `task watchdog` as the reset reason.
+
 ## Testing without the inverter
 
 Short pins 2 and 3 of the DB9 on the MAX3232 side (loopback). Every request sent to TCP port 8899 then comes back as the "response". The Status page counters show the traffic.
@@ -203,12 +233,13 @@ Short pins 2 and 3 of the DB9 on the MAX3232 side (loopback). Every request sent
 
 ```
 platformio.ini        build configuration (espressif32 6.12.0, Arduino)
-src/main.cpp          startup, BOOT button, WiFi watchdog
+src/main.cpp          startup, BOOT button, loop watchdog
+src/diag.*            boot counter, reset reason, restart cause, WiFi statistics
 src/config.*          settings stored in NVS
 src/rtu.*             UART / Modbus RTU master, bus mutex, statistics
 src/tcp_bridge.*      TCP server: RTU-over-TCP and Modbus TCP (MBAP)
 src/scanner.*         register scanner task
-src/wifi_setup.*      WiFiManager captive portal
+src/wifi_setup.*      WiFiManager captive portal, reconnect with backoff, WiFi watchdog
 src/web_ui.*          HTTP API and OTA
 src/web_page.h        single-page web UI
 tools/                register scanner for PC (Node.js + TypeScript)
