@@ -93,7 +93,7 @@ async function status(){try{const r=await fetch('/api/status');const j=await r.j
 $('#sub').textContent=j.host+' · '+j.ip+' · v'+j.version;
 const modes=['RTU over TCP','Modbus TCP (MBAP)'];
 const rows=[['Firmware','v'+j.version+' <span class="mut">('+j.built+')</span>'],['Chip',j.chip+' · IDF '+j.sdk],['Mode',modes[j.mode]+' on port '+j.port],['Serial',j.serial],['WiFi',j.ssid+' ('+j.rssi+' dBm)'],
-['Uptime',up(j.uptime)+' · boot #'+j.boots],['Last reset','<span class="'+(/brownout|crash|watchdog/.test(j.resetReason)?'bad':'')+'">'+j.resetReason+'</span>'+(j.restartCause?' ('+j.restartCause+')':'')],['WiFi uptime',j.wifiUp<0?'<span class="bad">not connected</span>':up(j.wifiUp)],['WiFi drops',j.wifiDisc+(j.wifiDisc?' · last '+up(j.wifiDiscAgo)+' ago':'')+(j.wifiReason?' · reason '+j.wifiReason:'')],['Gateway ping',j.gwOkAgo<0?'<span class="bad">no answer from '+j.gw+'</span>':j.gw+' · '+j.gwRtt+' ms · '+up(j.gwOkAgo)+' ago'+(j.gwFails?' · failed checks '+j.gwFails:'')+(j.gwReconn?' · <span class="bad">reconnects '+j.gwReconn+'</span>':'')],['Free heap',j.heap+' bytes (min '+j.minHeap+')'],['TCP clients',j.clients.length?j.clients.join('<br>'):'none'],
+['Uptime',up(j.uptime)+' · boot #'+j.boots],['Last reset','<span class="'+(/brownout|crash|watchdog/.test(j.resetReason)?'bad':'')+'">'+j.resetReason+'</span>'+(j.restartCause?' ('+j.restartCause+')':'')],['WiFi uptime',j.wifiUp<0?'<span class="bad">not connected</span>':up(j.wifiUp)],['WiFi drops',j.wifiDisc+(j.wifiDisc?' · last '+up(j.wifiDiscAgo)+' ago':'')+(j.wifiReason?' · reason '+j.wifiReason:'')],['Gateway ping',j.gwOkAgo<0?'<span class="bad">no answer from '+j.gw+'</span>':j.gw+' · '+j.gwRtt+' ms · '+up(j.gwOkAgo)+' ago'+(j.gwFails?' · failed checks '+j.gwFails:'')+(j.gwReconn?' · <span class="bad">reconnects '+j.gwReconn+'</span>':'')+(j.gwStuck?' · <span class="bad">stuck pings '+j.gwStuck+'</span>':'')],['Free heap',j.heap+' bytes (min '+j.minHeap+')'],['TCP clients',j.clients.length?j.clients.join('<br>'):'none'],
 ['Requests',j.requests],['Responses',j.responses],['Exceptions',j.exceptions],
 ['Timeouts','<span class="'+(j.timeouts?'bad':'')+'">'+j.timeouts+'</span>'],
 ['CRC errors','<span class="'+(j.crc?'bad':'')+'">'+j.crc+'</span>'],
@@ -101,9 +101,11 @@ const rows=[['Firmware','v'+j.version+' <span class="mut">('+j.built+')</span>']
 $('#st').innerHTML=rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('');
 $('#lreq').textContent=j.lastReq;$('#lresp').textContent=j.lastResp;}catch(e){}}
 setInterval(status,2000);status();
+const WL=['idle','no SSID','scan done','connected','connect failed','connection lost','disconnected'];
+function hb(b){return b?'<br><span class="mut">last heartbeat: up '+up(b.up)+' · WiFi '+(WL[b.wifi]||b.wifi)+' · gateway '+(b.gwAgo<0?'never answered':'answered '+up(b.gwAgo)+' before')+(b.fails?' · '+b.fails+' failed checks':'')+(b.ping?' · ping running':'')+'</span>':'';}
 const RAW={1:'POWERON',3:'SW',4:'OWDT',5:'DEEPSLEEP',6:'SDIO',7:'TG0WDT_SYS',8:'TG1WDT_SYS',9:'RTCWDT_SYS',10:'INTRUSION',11:'TGWDT_CPU',12:'SW_CPU',13:'RTCWDT_CPU',14:'EXT_CPU',15:'RTCWDT_BROWN_OUT',16:'RTCWDT_RTC'};
 async function hist(){try{const h=await (await fetch('/api/history')).json();
-$('#hist').innerHTML='<tr><td class="mut">Boot · ran before</td><td class="mut">Reason</td></tr>'+h.map(e=>'<tr><td>#'+e.boot+' · '+(e.ranS<0?'<span class="mut">unknown (power lost)</span>':up(e.ranS))+'</td><td><span class="'+(/brownout|crash|watchdog/.test(e.reason)?'bad':'')+'">'+e.reason+'</span>'+(e.cause?' ('+e.cause+')':'')+' <span class="mut">'+(RAW[e.raw]||e.raw)+'</span></td></tr>').join('');}catch(e){}}
+$('#hist').innerHTML='<tr><td class="mut">Boot · ran before</td><td class="mut">Reason</td></tr>'+h.map(e=>'<tr><td>#'+e.boot+' · '+(e.ranS<0?'<span class="mut">unknown (power lost)</span>':up(e.ranS))+'</td><td><span class="'+(/brownout|crash|watchdog/.test(e.reason)?'bad':'')+'">'+e.reason+'</span>'+(e.cause?' ('+e.cause+')':'')+' <span class="mut">'+(RAW[e.raw]||e.raw)+'</span>'+hb(e.hb)+'</td></tr>').join('');}catch(e){}}
 hist();
 async function loadCfg(){const j=await (await fetch('/api/config')).json();const f=$('#cfg');
 for(const k in j){const e=f.elements[k];if(e&&k!='pass')e.value=j[k];}}

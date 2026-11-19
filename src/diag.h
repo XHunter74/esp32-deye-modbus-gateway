@@ -10,8 +10,10 @@ void diagBegin();  // call first in setup()
 void diagLoop();   // call from loop(): keeps the uptime marker in RTC memory current
 
 // Restart history (newest first, DIAG_HISTORY_LEN entries kept in NVS) as a JSON array:
-// [{"boot":N,"reason":"...","raw":R,"cause":"...","ranS":S}], ranS = how long the previous
-// run lasted, -1 if unknown (RTC memory lost, i.e. the power went off).
+// [{"boot":N,"reason":"...","raw":R,"cause":"...","ranS":S,"hb":{...}}], ranS = how long the previous
+// run lasted, -1 if unknown (RTC memory lost, i.e. the power went off). "hb" is the last heartbeat of
+// the previous run (saved to NVS every 5 min, survives a power loss): uptime, WiFi status,
+// seconds since the gateway answered ping, failed checks in a row, ping session running.
 String diagHistoryJson();
 static constexpr int DIAG_HISTORY_LEN = 10;
 

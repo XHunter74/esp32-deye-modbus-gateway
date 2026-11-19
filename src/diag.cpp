@@ -6,6 +6,8 @@
 #include <esp_system.h>
 #include <rom/rtc.h>
 
+#include "netcheck.h"
+
 WifiStats gWifiStats;
 
 namespace {
@@ -25,15 +27,75 @@ RTC_NOINIT_ATTR RtcMarker rtcMarker;
 constexpr uint32_t RTC_MAGIC = 0x44475731;  // "DGW1"
 uint32_t lastMarkerS = UINT32_MAX;
 
-struct HistEntry {
+// Heartbeat: state snapshot saved to NVS every few minutes, survives a power loss.
+struct Heartbeat {
     uint32_t boot;
-    int32_t ranS;      // uptime of the previous run, -1 unknown
-    uint8_t reason;    // esp_reset_reason_t
-    uint8_t raw;       // ROM reset code of CPU0 (RESET_REASON)
+    uint32_t uptimeS;
+    int32_t gwOkAgoS;  // seconds since the gateway last answered ping, -1 never
+    uint16_t gwFails;  // failed checks in a row
+    uint8_t wifi;      // wl_status_t
+    uint8_t ping;      // ping session running
+};
+constexpr uint32_t HB_FIRST_S = 60;
+constexpr uint32_t HB_EVERY_S = 300;
+uint32_t nextHbS = HB_FIRST_S;
+
+struct HistEntryV1 {
+    uint32_t boot;
+    int32_t ranS;
+    uint8_t reason;
+    uint8_t raw;
     uint8_t pad[2];
     char cause[28];
 };
+
+struct HistEntry {
+    uint32_t boot;
+    int32_t ranS;      // uptime of the previous run from RTC memory, -1 unknown (power lost)
+    uint8_t reason;    // esp_reset_reason_t
+    uint8_t raw;       // ROM reset code of CPU0 (RESET_REASON)
+    uint8_t hbWifi;    // last heartbeat of the previous run
+    uint8_t hbPing;
+    char cause[28];
+    int32_t hbUptimeS;  // -1 = no heartbeat
+    int32_t hbGwOkAgoS;
+    uint16_t hbFails;
+    uint8_t pad[2];
+};
 HistEntry history[DIAG_HISTORY_LEN];
+
+void loadHistory(Preferences &p) {
+    if (p.getBytesLength("hist2") == sizeof(history)) {
+        p.getBytes("hist2", history, sizeof(history));
+        return;
+    }
+    HistEntryV1 old[DIAG_HISTORY_LEN];
+    if (p.getBytesLength("hist") != sizeof(old)) return;
+    p.getBytes("hist", old, sizeof(old));
+    for (int i = 0; i < DIAG_HISTORY_LEN; ++i) {
+        history[i].boot = old[i].boot;
+        history[i].ranS = old[i].ranS;
+        history[i].reason = old[i].reason;
+        history[i].raw = old[i].raw;
+        memcpy(history[i].cause, old[i].cause, sizeof(history[i].cause));
+        history[i].hbUptimeS = -1;
+    }
+    p.remove("hist");
+}
+
+void saveHeartbeat(uint32_t s) {
+    Heartbeat hb = {};
+    hb.boot = bootCount;
+    hb.uptimeS = s;
+    hb.gwOkAgoS = gNetcheck.lastOkMs ? (int32_t)((millis() - gNetcheck.lastOkMs) / 1000) : -1;
+    hb.gwFails = (uint16_t)(gNetcheck.failsInRow > 65535 ? 65535 : gNetcheck.failsInRow);
+    hb.wifi = (uint8_t)WiFi.status();
+    hb.ping = netcheckPingRunning() ? 1 : 0;
+    Preferences p;
+    p.begin(NS, false);
+    p.putBytes("hb", &hb, sizeof(hb));
+    p.end();
+}
 
 void writeMarker(uint32_t s) {
     rtcMarker.magic = RTC_MAGIC;
@@ -91,10 +153,20 @@ void diagBegin() {
     e.reason = (uint8_t)resetReason;
     e.raw = (uint8_t)rtc_get_reset_reason(0);
     strlcpy(e.cause, lastCause.c_str(), sizeof(e.cause));
-    if (p.getBytesLength("hist") == sizeof(history)) p.getBytes("hist", history, sizeof(history));
+    e.hbUptimeS = -1;
+    Heartbeat hb;
+    if (p.getBytesLength("hb") == sizeof(hb) && p.getBytes("hb", &hb, sizeof(hb)) == sizeof(hb) &&
+        hb.boot + 1 == bootCount) {
+        e.hbUptimeS = (int32_t)hb.uptimeS;
+        e.hbGwOkAgoS = hb.gwOkAgoS;
+        e.hbFails = hb.gwFails;
+        e.hbWifi = hb.wifi;
+        e.hbPing = hb.ping;
+    }
+    loadHistory(p);
     memmove(&history[1], &history[0], sizeof(HistEntry) * (DIAG_HISTORY_LEN - 1));
     history[0] = e;
-    p.putBytes("hist", history, sizeof(history));
+    p.putBytes("hist2", history, sizeof(history));
     p.end();
     writeMarker(0);
     Serial.printf("[diag] boot #%u, reset reason: %s%s%s\n", bootCount, diagResetReason(),
@@ -119,6 +191,10 @@ void diagLoop() {
     if (s != lastMarkerS) {
         lastMarkerS = s;
         writeMarker(s);
+        if (s >= nextHbS) {
+            nextHbS = s + HB_EVERY_S;
+            saveHeartbeat(s);
+        }
     }
 }
 
@@ -129,7 +205,11 @@ String diagHistoryJson() {
         if (!e.boot) break;
         if (i) j += ',';
         j += "{\"boot\":" + String(e.boot) + ",\"reason\":\"" + diagResetReasonName((esp_reset_reason_t)e.reason) +
-             "\",\"raw\":" + String(e.raw) + ",\"cause\":\"" + esc(e.cause) + "\",\"ranS\":" + String(e.ranS) + "}";
+             "\",\"raw\":" + String(e.raw) + ",\"cause\":\"" + esc(e.cause) + "\",\"ranS\":" + String(e.ranS);
+        if (e.hbUptimeS >= 0)
+            j += ",\"hb\":{\"up\":" + String(e.hbUptimeS) + ",\"wifi\":" + String(e.hbWifi) + ",\"gwAgo\":" +
+                 String(e.hbGwOkAgoS) + ",\"fails\":" + String(e.hbFails) + ",\"ping\":" + String(e.hbPing) + "}";
+        j += "}";
     }
     return j + "]";
 }
