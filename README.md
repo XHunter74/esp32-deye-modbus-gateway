@@ -18,7 +18,7 @@ Developed for a Deye SUN-10K single-phase hybrid (SG0xLP1). The primary client i
 - mDNS: `http://deye-gw.local`
 - Hold the **BOOT** button for 5 s to erase WiFi settings.
 - Self-healing WiFi: background reconnect with backoff, restart after 5 min without WiFi, gateway ping check that catches a "connected" but dead link, no fallback to the setup AP once configured.
-- Diagnostics on the Status page: boot counter, last reset reason (brownout, crash, watchdog, restart cause), WiFi drops with reason codes, minimum free heap.
+- Diagnostics on the Status page: boot counter, last reset reason (brownout, crash, watchdog, restart cause), history of the last 10 restarts with uptime before each, WiFi drops with reason codes, minimum free heap.
 - The on-board LED (GPIO2) lights up while a request is on the serial line.
 
 ## Hardware
@@ -224,6 +224,7 @@ If it comes back after a reset and the Status page shows the boot counter increa
 | Last reset | why the current boot happened: power-on, brownout, crash (panic), watchdog, or software restart with its cause (settings saved, firmware update, WiFi down for 5 min, ...) |
 | WiFi uptime | time since the current WiFi connection was established |
 | Gateway ping | router address, last round-trip time, how long ago it last answered, failed checks and forced reconnects since boot |
+| Restart history | last 10 boots, newest first: boot number, how long the previous run lasted, reset reason with restart cause and the raw ROM reset code (e.g. `RTCWDT_RTC`). "ran before" is kept in RTC memory, which survives watchdog, crash and software resets but not a power loss: *unknown (power lost)* means the supply went off, a known value means the chip reset while powered. Also at `/api/history` |
 | WiFi drops | lost connections since boot, time of the last one and the WiFi reason code (e.g. 200 beacon timeout = signal lost, 15/202 = wrong password) |
 | Free heap (min) | current and lowest free memory since boot |
 

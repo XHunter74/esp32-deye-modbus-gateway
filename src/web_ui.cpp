@@ -87,6 +87,11 @@ void handleStatus() {
     server.send(200, "application/json", j);
 }
 
+void handleHistory() {
+    if (!authorized()) return;
+    server.send(200, "application/json", diagHistoryJson());
+}
+
 void handleConfigGet() {
     if (!authorized()) return;
     String j = "{";
@@ -226,6 +231,7 @@ void handleUpdateUpload() {
 void webBegin() {
     server.on("/", HTTP_GET, handleIndex);
     server.on("/api/status", HTTP_GET, handleStatus);
+    server.on("/api/history", HTTP_GET, handleHistory);
     server.on("/api/config", HTTP_GET, handleConfigGet);
     server.on("/api/config", HTTP_POST, handleConfigPost);
     server.on("/api/scan/start", HTTP_POST, handleScanStart);

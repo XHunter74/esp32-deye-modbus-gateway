@@ -41,6 +41,7 @@ void setup() {
 }
 
 void loop() {
+    diagLoop();
     webLoop();
 
     static uint32_t pressedSince = 0;
