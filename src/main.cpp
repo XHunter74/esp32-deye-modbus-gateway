@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
+#include <esp_task_wdt.h>
 
 #include "config.h"
 #include "diag.h"
@@ -15,6 +16,7 @@
 
 static constexpr int BOOT_BUTTON = 0;              // hold 5 s to erase WiFi settings
 static constexpr uint32_t BUTTON_HOLD_MS = 5000;
+static constexpr uint32_t LOOP_WDT_TIMEOUT_S = 30;
 
 void setup() {
     Serial.begin(115200);
@@ -38,6 +40,8 @@ void setup() {
 
     // Reboot if loop() ever hangs; the Status page then shows "task watchdog" as reset reason.
     enableLoopWDT();
+    // 5 s (default) is too short: on a dead link a web response can block in TCP send for ~10 s.
+    esp_task_wdt_init(LOOP_WDT_TIMEOUT_S, true);
 }
 
 void loop() {

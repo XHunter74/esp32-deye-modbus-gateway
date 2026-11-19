@@ -56,6 +56,8 @@ void handleStatus() {
     j += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
     j += ",\"ssid\":\"" + jsonEscape(WiFi.SSID()) + "\"";
     j += ",\"rssi\":" + String(WiFi.RSSI());
+    j += ",\"bssid\":\"" + WiFi.BSSIDstr() + "\"";
+    j += ",\"channel\":" + String(WiFi.channel());
     j += ",\"uptime\":" + String(millis() / 1000);
     j += ",\"heap\":" + String(ESP.getFreeHeap());
     j += ",\"mode\":" + String((int)gConfig.mode);
